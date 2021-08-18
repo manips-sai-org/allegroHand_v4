@@ -281,12 +281,19 @@ static void* ioThreadProc(void* inst)
                             tau_des[i] = joint_torques_commanded[i] + gravity_torque[i];  // commanded torque from redis 
                         }
                     }
-                    else 
+                    else if (control_mode == POSITION_MODE)
                     {
                         // compute joint torque (PD control)
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded[i]) - kv_default[i] * dq[i] + gravity_torque[i];                            
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < MAX_DOF; i++)
+                        {
+                            tau_des[i] = gravity_torque[i];
                         }
                     }
 
