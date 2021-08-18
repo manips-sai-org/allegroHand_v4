@@ -14,6 +14,9 @@
 #include "RockScissorsPaper.h"
 #include <BHand/BHand.h>
 
+#include "RedisClient.h"
+#include <Eigen/Core>
+
 #define PEAKCAN (1)
 
 typedef char    TCHAR;
@@ -21,6 +24,64 @@ typedef char    TCHAR;
 #define _tcsicmp(x, y)   strcmp(x, y)
 
 using namespace std;
+using namespace Eigen;
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Redis client and control setup 
+RedisClient* redis_client;
+const string redis_host = "127.0.0.1";
+const string redis_port = "6379";
+
+// read 
+const string ALLEGRO_CONTROL_MODE = "allegroHand::controller::control_mode";
+const string ALLEGRO_TORQUE_COMMANDED = "allegroHand::controller::joint_torques_command";
+const string ALLEGRO_POSITION_COMMANDED = "allegroHand::controller::joint_positions_commanded";
+const string ALLEGRO_PALM_ORIENTATION = "allegroHand::controller::palm_orientation";
+
+// write
+const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions";
+const string ALLEGRO_CURRENT_VELOCITIES = "allegroHand::sensors::joint_velocities";
+
+int TORQUE_MODE = 0;
+int POSITION_MODE = 1;
+int control_mode = TORQUE_MODE;  // initialize starting control mode 
+
+VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
+VectorXd joint_velocities = VectorXd::Zero(MAX_DOF);
+MatrixXd R_palm = MatrixXd::Identity(3, 3);
+VectorXd joint_torques_commanded = VectorXd::Zero(MAX_DOF);
+VectorXd joint_positions_commanded = VectorXd::Zero(MAX_DOF);
+
+double kp_default[] = {
+    1.8, 1.8, 1.8, 1.8,
+    1.8, 1.8, 1.8, 1.8,
+    1.8, 1.8, 1.8, 1.8,
+    1.8, 1.8, 1.8, 1.8
+};
+double kv_default[] = {
+    0.07, 0.07, 0.07, 0.07,
+    0.07, 0.07, 0.07, 0.07,
+    0.07, 0.07, 0.07, 0.07,
+    0.07, 0.07, 0.07, 0.07
+};
+
+const bool average_filter = true;  // moving average filter for velocity 
+int buffer_size = 10;  
+int buffer_counter = 0;  
+MatrixXd velocity_buffer = MatrixXd::Zero(MAX_DOF, buffer_size);
+
+VectorXd torque_limits(dof), joint_limits(MAX_DOF);  // if safety is needed 
+
+// create read and write callback
+redis_client->createReadCallback(0);  
+redis_client->addIntToReadCallback(0, ALLEGRO_CONTROL_MODE, control_mode);
+redis_client->addEigenToReadCallback(0, ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
+redis_client->addEigenToReadCallback(0, ALLEGRO_POSITION_COMMANDED, joint_positions_commanded);
+redis_client->addEigenToReadCallback(0, ALLEGRO_PALM_ORIENTATION, R_palm);
+
+redis_client->createWriteCallback(0);
+redis_client->addEigenToWriteCallback(0, ALLEGRO_CURRENT_POSITIONS, joint_positions);
+redis_client->addEigenToWriteCallback(0, ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // for CAN communication
@@ -42,6 +103,10 @@ double q[MAX_DOF];
 double q_des[MAX_DOF];
 double tau_des[MAX_DOF];
 double cur_des[MAX_DOF];
+/* Added */
+double q_prev[MAX_DOF]; 
+double dq[MAX_DOF];  
+double gravity_torque[MAX_DOF];
 
 // USER HAND CONFIGURATION
 const bool	RIGHT_HAND = false;
@@ -148,10 +213,11 @@ static void* ioThreadProc(void* inst)
 //                    , vars.enc_actual[findex*4 + 2], vars.enc_actual[findex*4 + 3]);
 
                 if (data_return == (0x01 | 0x02 | 0x04 | 0x08))
-                {
+                {                    
                     // convert encoder count to joint angle
                     for (i=0; i<MAX_DOF; i++)
                     {
+                        q_prev[i] = q[i];  // added to save previous joint position 
                         q[i] = (double)(vars.enc_actual[i])*(333.3/65536.0)*(3.141592/180.0);
                     }
 
@@ -162,8 +228,70 @@ static void* ioThreadProc(void* inst)
 //                            , CAN_Ch, i, q[i*4+0]*RAD2DEG, q[i*4+1]*RAD2DEG, q[i*4+2]*RAD2DEG, q[i*4+3]*RAD2DEG);
 //                    }
 
-                    // compute joint torque
-                    ComputeTorque();
+                    /* Updated code for velocity filter, torque mode option, and safety */
+
+                    // Update velocity filter
+                    if (average_filter)
+                    {
+                        for (int i = 0; i < MAX_DOF; i++)
+                        {
+                            velocity_buffer(i, buffer_counter) = (q[i] - q_prev[i]) / delT;
+                            dq[i] = velocity_buffer.row(i).sum() / buffer_size;
+                        }
+
+                        // Update buffer counter (modulus is another approach)
+                        if (buffer_counter == buffer_size - 1) {
+                            buffer_counter = 0;
+                        } else {
+                            buffer_counter += 1;
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < MAX_DOF; i++)
+                        {
+                            dq[i] = (q[i] - q_prev[i]) / delT;
+                        }
+                    }
+
+                    for (int i = 0; i < MAX_DOF; i++)
+                    {
+                        joint_positions[i] = q[i];
+                        joint_velocities[i] = dq[i];
+                    }
+
+                    // Read and set redis keys 
+                    executeWriteCallback();  // write (joint positions, joint velocities)
+                    executeReadCallback();  // reads (control mode, commanded torques, commanded positions, commanded orientation)
+
+                    // Obtain gravity torques 
+                    pBHand->SetJointPosition(q);
+                    // pBHand->SetJointDesiredPosition(q);  
+                    pBHand->UpdateControl(0);
+                    pBHand->GetJointTorque(gravity_torque);
+                    // gravity_torque[12] = 0;  // artifact from previous driver
+
+                    // Set orientation
+                    pBHand->SetOrientation(R_palm.resize(9, 1).data());
+
+                    if (control_mode == TORQUE_MODE)
+                    {
+                        for (int i = 0; i < MAX_DOF; i++)
+                        {
+                            tau_des[i] = joint_torques_commanded[i] + gravity_torque[i];  // commanded torque from redis 
+                        }
+                    }
+                    else 
+                    {
+                        // compute joint torque (PD control)
+                        for (int i = 0; i < MAX_DOF; i++)
+                        {
+                            tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded[i]) - kv_default[i] * dq[i] + gravity_torque[i];                            
+                        }
+                    }
+
+                    /* Previous implementation of position-only torque control (private library) */
+                    // ComputeTorque();  
 
                     // convert desired torque to desired current and PWM count
                     for (int i=0; i<MAX_DOF; i++)
@@ -225,67 +353,35 @@ static void* ioThreadProc(void* inst)
 // Application main-loop. It handles the commands from rPanelManipulator and keyboard events
 void MainLoop()
 {
-    bool bRun = true;
+    // Initialize redis
+    redis_client.connect(hostname, port);
+    redis_client.set(ALLEGRO_CONTROL_MODE, POSITION_MODE);  // default is position mode 
+    redis_client.setEigenMatrixJSON(ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
+    redis_client.setEigenMatrixJSON(ALLEGRO_PALM_ORIENTATION, R_palm);
 
-    while (bRun)
-    {
-        int c = Getch();
-        switch (c)
-        {
-        case 'q':
-            if (pBHand) pBHand->SetMotionType(eMotionType_NONE);
-            bRun = false;
-            break;
-
-        case 'h':
-            if (pBHand) pBHand->SetMotionType(eMotionType_HOME);
-            break;
-
-        case 'r':
-            if (pBHand) pBHand->SetMotionType(eMotionType_READY);
-            break;
-
-        case 'g':
-            if (pBHand) pBHand->SetMotionType(eMotionType_GRASP_3);
-            break;
-
-        case 'k':
-            if (pBHand) pBHand->SetMotionType(eMotionType_GRASP_4);
-            break;
-
-        case 'p':
-            if (pBHand) pBHand->SetMotionType(eMotionType_PINCH_IT);
-            break;
-
-        case 'm':
-            if (pBHand) pBHand->SetMotionType(eMotionType_PINCH_MT);
-            break;
-
-        case 'a':
-            if (pBHand) pBHand->SetMotionType(eMotionType_GRAVITY_COMP);
-            break;
-
-        case 'e':
-            if (pBHand) pBHand->SetMotionType(eMotionType_ENVELOP);
-            break;
-
-        case 'f':
-            if (pBHand) pBHand->SetMotionType(eMotionType_NONE);
-            break;
-
-        case '1':
-            MotionRock();
-            break;
-
-        case '2':
-            MotionScissors();
-            break;
-
-        case '3':
-            MotionPaper();
-            break;
-        }
+    for (int i = 0; i < MAX_DOF; i++) {
+        joint_positions[i] = q[i];
     }
+    redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_POSITIONS, joint_positions);
+    redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
+    redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  // start at the initial position 
+
+    // Set gravity compensation as default behavior (needed to isolate gravity torques)
+    bool bRun = true;
+    pBhand->SetMotionType(eMotionType_GRAVITY_COMP);
+
+    // Set default orientation
+    pBHand->SetOrientation(R_palm.resize(9, 1).data());
+
+    // Set control gains (if using the private library)
+    // pBHand->SetGainsEx(kp_default, kv_default); 
+
+    // Main loop 
+    while (bRun) 
+    {
+        // Output necessary information to terminal here
+    }
+
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -533,6 +629,10 @@ int main(int argc, TCHAR* argv[])
     memset(q_des, 0, sizeof(q_des));
     memset(tau_des, 0, sizeof(tau_des));
     memset(cur_des, 0, sizeof(cur_des));
+    /* Added */
+    memset(q_prev, 0, sizeof(q_prev));
+    memset(dq, 0, sizeof(dq));
+    memset(gravity_torque, 0, sizeof(gravity_torque));
     curTime = 0.0;
 
     if (CreateBHandAlgorithm() && OpenCAN())
