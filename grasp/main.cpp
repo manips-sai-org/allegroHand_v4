@@ -28,7 +28,7 @@ using namespace Eigen;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // Redis client and control setup 
-RedisClient* redis_client;
+RedisClient redis_client;
 const string redis_host = "127.0.0.1";
 const string redis_port = "6379";
 
@@ -42,13 +42,18 @@ const string ALLEGRO_PALM_ORIENTATION = "allegroHand::controller::palm_orientati
 const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions";
 const string ALLEGRO_CURRENT_VELOCITIES = "allegroHand::sensors::joint_velocities";
 
-int TORQUE_MODE = 0;
-int POSITION_MODE = 1;
+const int TORQUE_MODE = 0;
+const int POSITION_MODE = 1;
 int control_mode = TORQUE_MODE;  // initialize starting control mode 
 
 VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
 VectorXd joint_velocities = VectorXd::Zero(MAX_DOF);
 MatrixXd R_palm = MatrixXd::Identity(3, 3);
+double R_palm_c[] = {
+    1, 0, 0,
+    0, 1, 0,
+    0, 0, 1
+};
 VectorXd joint_torques_commanded = VectorXd::Zero(MAX_DOF);
 VectorXd joint_positions_commanded = VectorXd::Zero(MAX_DOF);
 
@@ -70,18 +75,18 @@ int buffer_size = 10;
 int buffer_counter = 0;  
 MatrixXd velocity_buffer = MatrixXd::Zero(MAX_DOF, buffer_size);
 
-VectorXd torque_limits(dof), joint_limits(MAX_DOF);  // if safety is needed 
+// VectorXd torque_limits(MAX_DOF), joint_limits(MAX_DOF);  // if safety is needed 
 
 // create read and write callback
-redis_client->createReadCallback(0);  
-redis_client->addIntToReadCallback(0, ALLEGRO_CONTROL_MODE, control_mode);
-redis_client->addEigenToReadCallback(0, ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
-redis_client->addEigenToReadCallback(0, ALLEGRO_POSITION_COMMANDED, joint_positions_commanded);
-redis_client->addEigenToReadCallback(0, ALLEGRO_PALM_ORIENTATION, R_palm);
+redis_client.createReadCallback(0);  
+redis_client.addIntToReadCallback(0, ALLEGRO_CONTROL_MODE, control_mode);
+redis_client.addEigenToReadCallback(0, ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
+redis_client.addEigenToReadCallback(0, ALLEGRO_POSITION_COMMANDED, joint_positions_commanded);
+redis_client.addEigenToReadCallback(0, ALLEGRO_PALM_ORIENTATION, R_palm);
 
-redis_client->createWriteCallback(0);
-redis_client->addEigenToWriteCallback(0, ALLEGRO_CURRENT_POSITIONS, joint_positions);
-redis_client->addEigenToWriteCallback(0, ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
+redis_client.createWriteCallback(0);
+redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_POSITIONS, joint_positions);
+redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // for CAN communication
@@ -236,7 +241,7 @@ static void* ioThreadProc(void* inst)
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             velocity_buffer(i, buffer_counter) = (q[i] - q_prev[i]) / delT;
-                            dq[i] = velocity_buffer.row(i).sum() / buffer_size;
+                            dq[i] = velocity_buffer.row(i).sum() / buffer_size;  
                         }
 
                         // Update buffer counter (modulus is another approach)
@@ -254,6 +259,7 @@ static void* ioThreadProc(void* inst)
                         }
                     }
 
+                    // Transfer kinematics information to variables 
                     for (int i = 0; i < MAX_DOF; i++)
                     {
                         joint_positions[i] = q[i];
@@ -262,17 +268,15 @@ static void* ioThreadProc(void* inst)
 
                     // Read and set redis keys 
                     executeWriteCallback();  // write (joint positions, joint velocities)
-                    executeReadCallback();  // reads (control mode, commanded torques, commanded positions, commanded orientation)
+                    executeReadCallback();  // reads (control mode, commanded torques, commanded positions, palm orientation)
 
                     // Obtain gravity torques 
+                    pBHand->SetOrientation(R_palm.resize(9, 1).data());  // for gravity vector direction wrt palm (col major resizing)
                     pBHand->SetJointPosition(q);
                     // pBHand->SetJointDesiredPosition(q);  
                     pBHand->UpdateControl(0);
                     pBHand->GetJointTorque(gravity_torque);
                     // gravity_torque[12] = 0;  // artifact from previous driver
-
-                    // Set orientation
-                    pBHand->SetOrientation(R_palm.resize(9, 1).data());
 
                     if (control_mode == TORQUE_MODE)
                     {
@@ -362,13 +366,14 @@ void MainLoop()
 {
     // Initialize redis
     redis_client.connect(hostname, port);
-    redis_client.set(ALLEGRO_CONTROL_MODE, POSITION_MODE);  // default is position mode 
+    redis_client.set(ALLEGRO_CONTROL_MODE, control_mode);  // default is torque mode 
     redis_client.setEigenMatrixJSON(ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
     redis_client.setEigenMatrixJSON(ALLEGRO_PALM_ORIENTATION, R_palm);
 
     for (int i = 0; i < MAX_DOF; i++) {
-        joint_positions[i] = q[i];
+        joint_positions[i] = q[i];  // need to verify the startup value 
     }
+    std::cout << joint_positions.transpose() << std::endl;
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_POSITIONS, joint_positions);
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
     redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  // start at the initial position 
@@ -378,7 +383,10 @@ void MainLoop()
     pBhand->SetMotionType(eMotionType_GRAVITY_COMP);
 
     // Set default orientation
-    pBHand->SetOrientation(R_palm.resize(9, 1).data());
+    R_palm.transposeInPlace();  // row-major ordering 
+    std::cout << R_palm.resize(9, 1) << std::endl;
+    R_palm_c = R_palm.resize(9, 1).data();  // check
+    pBHand->SetOrientation(R_palm.resize(9, 1).data());  // assumes row-major ordering 
 
     // Set control gains (if using the private library)
     // pBHand->SetGainsEx(kp_default, kv_default); 
