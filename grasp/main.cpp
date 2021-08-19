@@ -262,8 +262,8 @@ static void* ioThreadProc(void* inst)
                     // Transfer kinematics information to variables 
                     for (int i = 0; i < MAX_DOF; i++)
                     {
-                        joint_positions[i] = q[i];
-                        joint_velocities[i] = dq[i];
+                        joint_positions(i) = q[i];
+                        joint_velocities(i) = dq[i];
                     }
 
                     // Read and set redis keys 
@@ -271,7 +271,12 @@ static void* ioThreadProc(void* inst)
                     executeReadCallback();  // reads (control mode, commanded torques, commanded positions, palm orientation)
 
                     // Obtain gravity torques 
-                    pBHand->SetOrientation(R_palm.resize(9, 1).data());  // for gravity vector direction wrt palm (col major resizing)
+                    R_palm.transposeInPlace();  // row-major ordering 
+                    R_palm.resize(9, 1);
+                    for (int i = 0; i < 9; i++) {
+                        R_palm_c[i] = R_palm(i);
+                    }
+                    pBHand->SetOrientation(R_palm_c);  // for gravity vector direction wrt palm (col major resizing)
                     pBHand->SetJointPosition(q);
                     // pBHand->SetJointDesiredPosition(q);  
                     pBHand->UpdateControl(0);
@@ -282,7 +287,7 @@ static void* ioThreadProc(void* inst)
                     {
                         for (int i = 0; i < MAX_DOF; i++)
                         {
-                            tau_des[i] = joint_torques_commanded[i] + gravity_torque[i];  // commanded torque from redis 
+                            tau_des[i] = joint_torques_commanded(i) + gravity_torque[i];  // commanded torque from redis 
                         }
                     }
                     else if (control_mode == POSITION_MODE)
@@ -290,7 +295,7 @@ static void* ioThreadProc(void* inst)
                         // compute joint torque (PD control)
                         for (int i = 0; i < MAX_DOF; i++)
                         {
-                            tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded[i]) - kv_default[i] * dq[i] + gravity_torque[i];                            
+                            tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded(i)) - kv_default[i] * dq[i] + gravity_torque[i];                            
                         }
                     }
                     else
@@ -371,7 +376,7 @@ void MainLoop()
     redis_client.setEigenMatrixJSON(ALLEGRO_PALM_ORIENTATION, R_palm);
 
     for (int i = 0; i < MAX_DOF; i++) {
-        joint_positions[i] = q[i];  // need to verify the startup value 
+        joint_positions(i) = q[i];  // need to verify the startup value 
     }
     std::cout << joint_positions.transpose() << std::endl;
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_POSITIONS, joint_positions);
@@ -384,9 +389,11 @@ void MainLoop()
 
     // Set default orientation
     R_palm.transposeInPlace();  // row-major ordering 
-    std::cout << R_palm.resize(9, 1) << std::endl;
-    R_palm_c = R_palm.resize(9, 1).data();  // check
-    pBHand->SetOrientation(R_palm.resize(9, 1).data());  // assumes row-major ordering 
+    R_palm.resize(9, 1);
+    for (int i = 0; i < 9; i++) {
+        R_palm_c[i] = R_palm(i);
+    }
+    pBHand->SetOrientation(R_palm_c);  // assumes row-major ordering 
 
     // Set control gains (if using the private library)
     // pBHand->SetGainsEx(kp_default, kv_default); 
