@@ -6,7 +6,7 @@
  * Created: April 2017
  */
 
-#include "../include/RedisClient.h"
+#include "RedisClient.h"
 #include <iostream>
 #include <sstream>
 
