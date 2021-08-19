@@ -1,10 +1,12 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 3.0)
 project(AllegroHand)
 
 Set (AllegroHand_VERSION_MAJOR 1)
 Set (AllegroHand_VERSION_MINOR 0)
 
-set (CMAKE_CXX_FLAGS "-O2 -Wall")
+set (CMAKE_CXX_FLAGS "-O2 -Wall -std=c++11")
+
+FIND_PACKAGE(PkgConfig REQUIRED)
 
 # eigen3
 set(EIGEN3_INCLUDE_DIR $ENV{EIGEN3_INCLUDE_DIR})
