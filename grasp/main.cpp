@@ -16,6 +16,7 @@
 
 #include "RedisClient.h"
 #include <Eigen/Core>
+#include <boost/algorithm/clamp.hpp>
 
 #define PEAKCAN (1)
 
@@ -42,12 +43,14 @@ const string ALLEGRO_PALM_ORIENTATION = "allegroHand::controller::palm_orientati
 // Write
 const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions";
 const string ALLEGRO_CURRENT_VELOCITIES = "allegroHand::sensors::joint_velocities";
+const string ALLEGRO_DRIVER_READY = "allegroHand::controller::driver_ready";
 
-// Stup control modes 
+// Setup control modes 
 const int TORQUE_MODE = 0;
 const int POSITION_MODE = 1;
 const int GRAVITY_MODE = 2; 
 int control_mode = GRAVITY_MODE;  // initialize starting control mode
+bool driver_ready = false;  // initialize driver not ready 
 
 VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
 VectorXd joint_velocities = VectorXd::Zero(MAX_DOF);
@@ -78,7 +81,7 @@ int buffer_size = 10;
 int buffer_counter = 0;  
 MatrixXd velocity_buffer = MatrixXd::Zero(MAX_DOF, buffer_size);
 
-// VectorXd torque_limits(MAX_DOF), joint_limits(MAX_DOF);  // if safety is needed, include it here
+double tau_max = 0.65;  // safety saturation (0.7 is hardware limits)
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // for CAN communication
@@ -172,6 +175,7 @@ static void* ioThreadProc(void* inst)
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_POSITIONS, joint_positions);
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
     redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  
+    redis_client.set(ALLEGRO_DRIVER_READY, "0");  // set to driver not ready (false)
 
     // Create read and write callback
     redis_client.createReadCallback(0);  
@@ -288,11 +292,11 @@ static void* ioThreadProc(void* inst)
                     // Debug outputs 
                     if (sendNum % 1000 == 0)
                     {
-                        std::cout << "Control Mode: " << control_mode << std::endl;
+                        // std::cout << "Control Mode: " << control_mode << std::endl;
                         for (int i = 0; i < 4; i++) 
                         {
-                            std::cout << std::setprecision(2) << joint_positions.segment(4 * i, 4).transpose() << std::endl;
-                            std::cout << std::setprecision(2) << joint_velocities.segment(4 * i, 4).transpose() << std::endl;
+                            // std::cout << std::setprecision(2) << joint_positions.segment(4 * i, 4).transpose() << std::endl;
+                            // std::cout << std::setprecision(2) << joint_velocities.segment(4 * i, 4).transpose() << std::endl;
                         }
                     }
 
@@ -321,12 +325,19 @@ static void* ioThreadProc(void* inst)
                             tau_des[i] = 0;  // stiction will hold the hand in place; gravity torque used here will assume q = 0, which may not be q current
                         }
                     }
+                    else if (driver_ready == false)
+                    {
+                        redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  // set the current hand configuration as the current desired position 
+                        driver_ready = true;
+                        redis_client.set(ALLEGRO_DRIVER_READY, "1");  // std::stoi() from the controller side 
+                    }
                     else if (control_mode == TORQUE_MODE)
                     {
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             tau_des[i] = joint_torques_commanded(i) + gravity_torque[i]; 
                         }
+                        redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  // set the current hand configuration as the current desired position 
                     }
                     else if (control_mode == POSITION_MODE)
                     {
@@ -341,6 +352,13 @@ static void* ioThreadProc(void* inst)
                         {
                             tau_des[i] = gravity_torque[i];
                         }
+                        redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  // set the current hand configuration as the current desired position 
+                    }
+
+                    // Torque saturation
+                    for (int i = 0; i < MAX_DOF; i++)
+                    {
+                        tau_des[i] = boost::algorithm::clamp(tau_des[i], -tau_max, tau_max);
                     }
 
                     /* Previous implementation of position-only torque control (private library) */
