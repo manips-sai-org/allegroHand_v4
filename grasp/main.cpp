@@ -45,12 +45,14 @@ const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions"
 const string ALLEGRO_CURRENT_VELOCITIES = "allegroHand::sensors::joint_velocities";
 const string ALLEGRO_DRIVER_READY = "allegroHand::controller::driver_ready";
 
+
 // Setup control modes 
 const int TORQUE_MODE = 0;
 const int POSITION_MODE = 1;
 const int GRAVITY_MODE = 2; 
 int control_mode = GRAVITY_MODE;  // initialize starting control mode
 bool driver_ready = false;  // initialize driver not ready 
+
 
 VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
 VectorXd joint_velocities = VectorXd::Zero(MAX_DOF);
@@ -83,6 +85,7 @@ MatrixXd velocity_buffer = MatrixXd::Zero(MAX_DOF, buffer_size);
 
 double tau_max = 0.65;  // safety saturation (0.7 is hardware limits)
 
+
 /////////////////////////////////////////////////////////////////////////////////////////
 // for CAN communication
 const double delT = 0.003;
@@ -109,8 +112,8 @@ double dq[MAX_DOF];
 double gravity_torque[MAX_DOF];
 
 // USER HAND CONFIGURATION
-const bool	RIGHT_HAND = false;
-const int	HAND_VERSION = 4;
+const bool RIGHT_HAND = false;
+const int HAND_VERSION = 4;
 
 const double tau_cov_const_v4 = 1200.0; // 1200.0 for SAH040xxxxx
 
@@ -176,6 +179,7 @@ static void* ioThreadProc(void* inst)
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
     redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  
     redis_client.set(ALLEGRO_DRIVER_READY, "0");  // set to driver not ready (false)
+
 
     // Create read and write callback
     redis_client.createReadCallback(0);  
@@ -297,6 +301,7 @@ static void* ioThreadProc(void* inst)
                         {
                             // std::cout << std::setprecision(2) << joint_positions.segment(4 * i, 4).transpose() << std::endl;
                             // std::cout << std::setprecision(2) << joint_velocities.segment(4 * i, 4).transpose() << std::endl;
+
                         }
                     }
 
