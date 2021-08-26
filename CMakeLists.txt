@@ -34,4 +34,7 @@ set(REDIS_LIBRARY
 	${JSONCPP_LIBRARY}
 	${HIREDIS_LIBRARY})
 
+set (PROJECT_BINARY_DIR ${PROJECT_SOURCE_DIR}/bin)
+
+# add apps
 add_subdirectory (grasp)
