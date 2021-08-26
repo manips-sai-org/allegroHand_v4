@@ -1,13 +1,17 @@
-Allegro Hand V4 Redis Driver
+Allegro Hand V4 - Redis Driver
 ==========================
-This driver interfaces with the Allegro Hand through Redis (https://redis.io/)<br /> 
+This driver interfaces with the Allegro Hand through **Redis** (https://redis.io/)<br /> 
 Note that this project works only for PEAK System CAN interface (chardev) for USB: PCAN-USB
 
+## Resources: 
+  - Original Git Repo:
+    https://github.com/simlabrobotics/allegro_hand_linux_v4
+  - User manual:
+    http://wiki.wonikrobotics.com/AllegroHandWiki/index.php/File:V4_AllegroHandUsersManual_1.1.pdf
 
-Original Git Repo
-========
-https://github.com/simlabrobotics/allegro_hand_linux_v4
-
+Inertial Frame and Joints
+======================
+![hand conventions](https://github.com/manips-sai-org/allegroHand_v4/blob/master/handConventions.png)
 
 Required libraries
 ======================
