@@ -599,15 +599,19 @@ void PrintInstruction()
     printf("Allegro Hand: ");
     if (RIGHT_HAND) printf("Right Hand, v%i.x\n\n", HAND_VERSION); else printf("Left Hand, v%i.x\n\n", HAND_VERSION);
 
+    printf(">> Default initialization:\n");
+    printf("   Control: Gravity compensation\n");
+    printf("   Palm orientation: identity\n\n\n");
+
     printf(">> Control Modes:\n");
     printf("   0: Gravity compensation\n");
     printf("   1: Torque control \n");
     printf("   2: Position control\n\n\n");
 
-    // printf(">> Redis keys to set:\n");
     printf(">> Redis key to switch control: \n   set \"allegroHand::controller::control_mode\" mode_#\n\n");
     printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
     printf(">> Redis key to set joint positions: \n   set \"allegroHand::sensors::joint_positions\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
+    printf(">> Redis key to set palm orientation: \n   set \"allegroHand::controller::palm_orientation\" \"[[0,0,1],[0,1,0],[-1,0,0]]\"\n\n");
 
     printf("--------------------------------------------------\n\n");
 
