@@ -429,7 +429,7 @@ static void* ioThreadProc(void* inst)
 // Application main-loop. It handles the commands from rPanelManipulator and keyboard events
 void MainLoop()
 {
-    std::cout << "Starting Allegro Hand Driver :^)" << std::endl;
+    std::cout << "Starting Allegro Hand Driver :)" << std::endl;
 
     bool bRun = true;
 
@@ -592,26 +592,25 @@ void DestroyBHandAlgorithm()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
-// Print program information and keyboard instructions
+// Print program information and redis instructions
 void PrintInstruction()
 {
     printf("--------------------------------------------------\n");
-    printf("myAllegroHand: ");
+    printf("Allegro Hand: ");
     if (RIGHT_HAND) printf("Right Hand, v%i.x\n\n", HAND_VERSION); else printf("Left Hand, v%i.x\n\n", HAND_VERSION);
 
-    printf("Keyboard Commands:\n");
-    printf("H: Home Position (PD control)\n");
-    printf("R: Ready Position (used before grasping)\n");
-    printf("G: Three-Finger Grasp\n");
-    printf("K: Four-Finger Grasp\n");
-    printf("P: Two-finger pinch (index-thumb)\n");
-    printf("M: Two-finger pinch (middle-thumb)\n");
-    printf("E: Envelop Grasp (all fingers)\n");
-    printf("A: Gravity Compensation\n\n");
-    printf("F: Servos OFF (any grasp cmd turns them back on)\n");
-    printf("Q: Quit this program\n");
+    printf(">> Control Modes:\n");
+    printf("   0: Gravity compensation\n");
+    printf("   1: Torque control \n");
+    printf("   2: Position control\n\n\n");
+
+    // printf(">> Redis keys to set:\n");
+    printf(">> Redis key to switch control: \n   set \"allegroHand::controller::control_mode\" mode_#\n\n");
+    printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
+    printf(">> Redis key to set joint positions: \n   set \"allegroHand::sensors::joint_positions\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
 
     printf("--------------------------------------------------\n\n");
+
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
