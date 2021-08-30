@@ -605,8 +605,8 @@ void PrintInstruction()
 
     printf(">> Control Modes:\n");
     printf("   0: Torque control \n");
-    printf("   1: Position control\n\n\n");
-    printf("   2: Gravity compensation\n");
+    printf("   1: Position control\n");
+    printf("   2: Gravity compensation\n\n\n");
 
     printf(">> Redis key to switch control: \n   set \"allegroHand::controller::control_mode\" mode_#\n\n");
     printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
