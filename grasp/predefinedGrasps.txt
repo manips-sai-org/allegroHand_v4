@@ -1,4 +1,7 @@
 # Predefined grasps
 
-# Clyde, Screw
+# Clyde, 3 finger, Screw
 set "allegroHand::controller::joint_positions_commanded" "[0.165898,0.928462,0.486777,1.368195,0.362597,0.869701,0.451183,1.342898,-0.036837,1.008349,0.372006,0.824432,1.258661,0.113617,0.952961,0.373870]"
+
+# Bonnie, 3 finger, Nut
+set "allegroHand::controller::joint_positions_commanded" "[0.025653,0.238507,1.743042,1.022285,-0.277296,0.774636,1.044387,0.950831,-0.464498,1.088059,0.645397,0.988289,0.808188,0.842628,1.565782,-0.243300]"
