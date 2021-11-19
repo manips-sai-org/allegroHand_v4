@@ -7,3 +7,6 @@ target_link_libraries (grasp BHand pcanbasic pthread ${REDIS_LIBRARY})
 
 #install (TARGETS grasp DESTINATION ${PROJECT_SOURCE_DIR}/bin)
 install (TARGETS grasp DESTINATION ${PROJECT_BINARY_DIR}/bin)
+
+# copy control launch script to runtime directory
+FILE(COPY launch_grasp.sh DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
