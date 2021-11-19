@@ -12,6 +12,7 @@
 #include "canAPI.h"
 #include "rDeviceAllegroHandCANDef.h"
 #include "RockScissorsPaper.h"
+#include "handPos.h"
 #include <BHand/BHand.h>
 
 #include "RedisClient.h"
@@ -36,6 +37,7 @@ const struct timeval& timeout = {1, 500000};
 
 // Read 
 const string ALLEGRO_CONTROL_MODE = "allegroHand::controller::control_mode";
+const string ALLEGRO_HAND_POS_PREDEFINED = "allegroHand::controller::hand_pos_predefined";
 const string ALLEGRO_TORQUE_COMMANDED = "allegroHand::controller::joint_torques_commanded";
 const string ALLEGRO_POSITION_COMMANDED = "allegroHand::controller::joint_positions_commanded";
 const string ALLEGRO_PALM_ORIENTATION = "allegroHand::controller::palm_orientation";
@@ -50,9 +52,12 @@ const string ALLEGRO_DRIVER_READY = "allegroHand::controller::driver_ready";
 const int TORQUE_MODE = 0;
 const int POSITION_MODE = 1;
 const int GRAVITY_MODE = 2; 
+const int POSITION_MODE_PREDEFINED = 3; 
 int control_mode = GRAVITY_MODE;  // initialize starting control mode
 bool driver_ready = false;  // initialize driver not ready 
 
+const int HAND_GRASP1 = 0;
+int hand_pos_predefined = HAND_GRASP1;  // default hand posture in POSITION_MODE_PREDEFINED
 
 VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
 VectorXd joint_velocities = VectorXd::Zero(MAX_DOF);
@@ -84,6 +89,19 @@ double kp_default[] = {
     2.5, 2.5, 2.5, 2.5 //thumb
 };
 double kv_default[] = {
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09
+};
+
+double kp_variable[] = {
+    5.0, 5.0, 5.0, 5.0,
+    5.0, 5.0, 5.0, 5.0,
+    5.0, 5.0, 5.0, 5.0,
+    2.5, 2.5, 2.5, 2.5 //thumb
+};
+double kv_variable[] = {
     0.09, 0.09, 0.09, 0.09,
     0.09, 0.09, 0.09, 0.09,
     0.09, 0.09, 0.09, 0.09,
@@ -180,7 +198,8 @@ static void* ioThreadProc(void* inst)
 
     // Initialize redis
     redis_client.connect(hostname, port, timeout);
-    redis_client.set(ALLEGRO_CONTROL_MODE, std::to_string(control_mode));  
+    redis_client.set(ALLEGRO_CONTROL_MODE, std::to_string(control_mode));
+    redis_client.set(ALLEGRO_HAND_POS_PREDEFINED, std::to_string(hand_pos_predefined));   
     redis_client.setEigenMatrixJSON(ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
     redis_client.setEigenMatrixJSON(ALLEGRO_PALM_ORIENTATION, R_palm);
 
@@ -196,6 +215,7 @@ static void* ioThreadProc(void* inst)
     // Create read and write callback
     redis_client.createReadCallback(0);  
     redis_client.addIntToReadCallback(0, ALLEGRO_CONTROL_MODE, control_mode);
+    redis_client.addIntToReadCallback(0, ALLEGRO_HAND_POS_PREDEFINED, hand_pos_predefined);
     redis_client.addEigenToReadCallback(0, ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
     redis_client.addEigenToReadCallback(0, ALLEGRO_POSITION_COMMANDED, joint_positions_commanded);
     redis_client.addEigenToReadCallback(0, ALLEGRO_PALM_ORIENTATION, R_palm);
@@ -361,6 +381,25 @@ static void* ioThreadProc(void* inst)
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded(i)) - kv_default[i] * dq[i] + gravity_torque[i];                            
+                        }
+                    }
+                    else if (control_mode == POSITION_MODE_PREDEFINED)
+                    {
+                        if (hand_pos_predefined == HAND_GRASP1)
+                        {
+                            joint_positions_commanded = pos1;
+                            kp_variable = kp1;
+                            kv_variable = kv1;
+                        }
+                        else
+                        {
+                            joint_positions_commanded = q;
+                            kp_variable = kp_default;
+                            kv_variable = kv_default;
+                        }
+                        for (int i = 0; i < MAX_DOF; i++)
+                        {
+                            tau_des[i] = - kp_variable[i] * (q[i] - joint_positions_commanded(i)) - kv_variable[i] * dq[i] + gravity_torque[i];                            
                         }
                     }
                     else  
