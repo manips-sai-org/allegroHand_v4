@@ -57,6 +57,7 @@ int control_mode = GRAVITY_MODE;  // initialize starting control mode
 bool driver_ready = false;  // initialize driver not ready 
 
 const int HAND_GRASP1 = 0;
+const int HAND_GRASP2 = 1;
 int hand_pos_predefined = HAND_GRASP1;  // default hand posture in POSITION_MODE_PREDEFINED
 
 VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
@@ -387,15 +388,32 @@ static void* ioThreadProc(void* inst)
                     {
                         if (hand_pos_predefined == HAND_GRASP1)
                         {
-                            joint_positions_commanded = pos1;
-                            kp_variable = kp1;
-                            kv_variable = kv1;
+                            cout << "mode" << hand_pos_predefined << endl;
+                            for (int i = 0; i < MAX_DOF; i++)
+                            {
+                                joint_positions_commanded[i] = pos1[i]; 
+                                kp_variable[i] = kp1[i];
+                                kv_variable[i] = kv1[i];
+                            }
+                            cout << joint_positions_commanded << endl;
+                        }
+                        else if (hand_pos_predefined == HAND_GRASP2)
+                        {
+                            for (int i = 0; i < MAX_DOF; i++)
+                            {
+                                joint_positions_commanded[i] = pos2[i]; 
+                                kp_variable[i] = kp1[i];
+                                kv_variable[i] = kv1[i];
+                            }
                         }
                         else
                         {
-                            joint_positions_commanded = q;
-                            kp_variable = kp_default;
-                            kv_variable = kv_default;
+                            for (int i = 0; i < MAX_DOF; i++)
+                            {
+                                joint_positions_commanded[i] = q[i]; 
+                                kp_variable[i] = kp_default[i];
+                                kv_variable[i] = kv_default[i];
+                            }
                         }
                         for (int i = 0; i < MAX_DOF; i++)
                         {
