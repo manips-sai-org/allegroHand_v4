@@ -1,4 +1,3 @@
-
 #include "rDeviceAllegroHandCANDef.h"
 #include <BHand/BHand.h>
 
@@ -18,6 +17,7 @@
 //	-0.0312, 0.4, 0.6, -0.0,
 //	-0.1019, 1.2375, 1.1346,
 //	1.0244, 1.0, 0.6331, 1.3509, 1.0};
+
 // ROCK-SCISSORS-PAPER(RIGHT HAND)
 static double rock[] = {
 	-0.1194, 1.2068, 1.0, 1.4042,

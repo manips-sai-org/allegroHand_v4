@@ -379,13 +379,6 @@ static void* ioThreadProc(void* inst)
                     }
                     else if (control_mode == POSITION_MODE)
                     {
-                        for (int i = 0; i < MAX_DOF; i++)
-                        {
-                            tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded(i)) - kv_default[i] * dq[i] + gravity_torque[i];                            
-                        }
-                    }
-                    else if (control_mode == POSITION_MODE_PREDEFINED)
-                    {
                         if (hand_pos_predefined == HAND_GRASP1)
                         {
                             cout << "mode" << hand_pos_predefined << endl;
@@ -395,7 +388,6 @@ static void* ioThreadProc(void* inst)
                                 kp_variable[i] = kp1[i];
                                 kv_variable[i] = kv1[i];
                             }
-                            cout << joint_positions_commanded << endl;
                         }
                         else if (hand_pos_predefined == HAND_GRASP2)
                         {
@@ -415,11 +407,13 @@ static void* ioThreadProc(void* inst)
                                 kv_variable[i] = kv_default[i];
                             }
                         }
+                        
                         for (int i = 0; i < MAX_DOF; i++)
                         {
-                            tau_des[i] = - kp_variable[i] * (q[i] - joint_positions_commanded(i)) - kv_variable[i] * dq[i] + gravity_torque[i];                            
+                            tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded(i)) - kv_default[i] * dq[i] + gravity_torque[i];                            
                         }
                     }
+                    
                     else  
                     {
                         for (int i = 0; i < MAX_DOF; i++)
