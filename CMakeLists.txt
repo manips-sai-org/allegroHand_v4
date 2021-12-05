@@ -5,6 +5,7 @@ Set (AllegroHand_VERSION_MAJOR 1)
 Set (AllegroHand_VERSION_MINOR 0)
 
 set (CMAKE_CXX_FLAGS "-O2 -Wall -std=c++11")
+SET(CMAKE_BUILD_TYPE "Debug")
 
 FIND_PACKAGE(PkgConfig REQUIRED)
 

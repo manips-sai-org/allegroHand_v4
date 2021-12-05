@@ -1,23 +1,18 @@
-//
-// 20141209: kcchang: changed window version to linux 
-
-// myAllegroHand.cpp : Defines the entry point for the console application.
-//
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <termios.h>  //_getch
+#include <termios.h>  
 #include <string.h>
 #include <pthread.h>
 #include "canAPI.h"
 #include "rDeviceAllegroHandCANDef.h"
 #include "RockScissorsPaper.h"
-#include "handPos.h"
+#include "predefinedGrasps.h"
 #include <BHand/BHand.h>
 
 #include "RedisClient.h"
 #include <Eigen/Core>
-#include <boost/algorithm/clamp.hpp>
+#include <boost/algorithm/clamp.hpp>                                                  
 
 #define PEAKCAN (1)
 
@@ -37,7 +32,7 @@ const struct timeval& timeout = {1, 500000};
 
 // Read 
 const string ALLEGRO_CONTROL_MODE = "allegroHand::controller::control_mode";
-const string ALLEGRO_HAND_POS_PREDEFINED = "allegroHand::controller::hand_pos_predefined";
+const string ALLEGRO_PREDEFINED_GRASP = "allegroHand::controller::predefined_grasp";
 const string ALLEGRO_TORQUE_COMMANDED = "allegroHand::controller::joint_torques_commanded";
 const string ALLEGRO_POSITION_COMMANDED = "allegroHand::controller::joint_positions_commanded";
 const string ALLEGRO_PALM_ORIENTATION = "allegroHand::controller::palm_orientation";
@@ -47,18 +42,27 @@ const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions"
 const string ALLEGRO_CURRENT_VELOCITIES = "allegroHand::sensors::joint_velocities";
 const string ALLEGRO_DRIVER_READY = "allegroHand::controller::driver_ready";
 
-
 // Setup control modes 
 const int TORQUE_MODE = 0;
 const int POSITION_MODE = 1;
 const int GRAVITY_MODE = 2; 
-const int POSITION_MODE_PREDEFINED = 3; 
 int control_mode = GRAVITY_MODE;  // initialize starting control mode
 bool driver_ready = false;  // initialize driver not ready 
 
-const int HAND_GRASP1 = 0;
-const int HAND_GRASP2 = 1;
-int hand_pos_predefined = HAND_GRASP1;  // default hand posture in POSITION_MODE_PREDEFINED
+// Predefined hand grasp name and initialize gains
+string predefined_grasp = "home";  //initialized to home, then set through redis
+double kp[] = {
+    5.0, 5.0, 5.0, 5.0,
+    5.0, 5.0, 5.0, 5.0,
+    5.0, 5.0, 5.0, 5.0,
+    2.5, 2.5, 2.5, 2.5 
+};
+double kv[] = {
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09
+};
 
 VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
 VectorXd joint_velocities = VectorXd::Zero(MAX_DOF);
@@ -70,44 +74,6 @@ double R_palm_c[] = {
 };
 VectorXd joint_torques_commanded = VectorXd::Zero(MAX_DOF);
 VectorXd joint_positions_commanded = VectorXd::Zero(MAX_DOF);
-
-// double kp_default[] = {
-//     1.8, 1.8, 1.8, 1.8,
-//     1.8, 1.8, 1.8, 1.8,
-//     1.8, 1.8, 1.8, 1.8,
-//     1.8, 1.8, 1.8, 1.8
-// };
-// double kv_default[] = {
-//     0.07, 0.07, 0.07, 0.07,
-//     0.07, 0.07, 0.07, 0.07,
-//     0.07, 0.07, 0.07, 0.07,
-//     0.07, 0.07, 0.07, 0.07
-// };
-double kp_default[] = {
-    5.0, 5.0, 5.0, 5.0,
-    5.0, 5.0, 5.0, 5.0,
-    5.0, 5.0, 5.0, 5.0,
-    2.5, 2.5, 2.5, 2.5 //thumb
-};
-double kv_default[] = {
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09
-};
-
-double kp_variable[] = {
-    5.0, 5.0, 5.0, 5.0,
-    5.0, 5.0, 5.0, 5.0,
-    5.0, 5.0, 5.0, 5.0,
-    2.5, 2.5, 2.5, 2.5 //thumb
-};
-double kv_variable[] = {
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09
-};
 
 const bool average_filter = true;  // moving average filter for velocity 
 int buffer_size = 10;  
@@ -200,7 +166,7 @@ static void* ioThreadProc(void* inst)
     // Initialize redis
     redis_client.connect(hostname, port, timeout);
     redis_client.set(ALLEGRO_CONTROL_MODE, std::to_string(control_mode));
-    redis_client.set(ALLEGRO_HAND_POS_PREDEFINED, std::to_string(hand_pos_predefined));   
+    redis_client.set(ALLEGRO_PREDEFINED_GRASP, predefined_grasp);   
     redis_client.setEigenMatrixJSON(ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
     redis_client.setEigenMatrixJSON(ALLEGRO_PALM_ORIENTATION, R_palm);
 
@@ -216,7 +182,7 @@ static void* ioThreadProc(void* inst)
     // Create read and write callback
     redis_client.createReadCallback(0);  
     redis_client.addIntToReadCallback(0, ALLEGRO_CONTROL_MODE, control_mode);
-    redis_client.addIntToReadCallback(0, ALLEGRO_HAND_POS_PREDEFINED, hand_pos_predefined);
+    redis_client.addStringToReadCallback(0, ALLEGRO_PREDEFINED_GRASP, predefined_grasp);
     redis_client.addEigenToReadCallback(0, ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
     redis_client.addEigenToReadCallback(0, ALLEGRO_POSITION_COMMANDED, joint_positions_commanded);
     redis_client.addEigenToReadCallback(0, ALLEGRO_PALM_ORIENTATION, R_palm);
@@ -233,10 +199,10 @@ static void* ioThreadProc(void* inst)
         /* wait for the event */
         while (0 == get_message(CAN_Ch, &id, &len, data, FALSE))
         {
-//            printf(">CAN(%d): ", CAN_Ch);
-//            for(int nd=0; nd<len; nd++)
-//                printf("%02x ", data[nd]);
-//            printf("\n");
+            // printf(">CAN(%d): ", CAN_Ch);
+            // for(int nd=0; nd<len; nd++)
+            //     printf("%02x ", data[nd]);
+            //     printf("\n");
 
             switch (id)
             {
@@ -272,10 +238,10 @@ static void* ioThreadProc(void* inst)
                 data_return |= (0x01 << (findex));
                 recvNum++;
 
-//                printf(">CAN(%d): Encoder[%d] Count : %6d %6d %6d %6d\n"
-//                    , CAN_Ch, findex
-//                    , vars.enc_actual[findex*4 + 0], vars.enc_actual[findex*4 + 1]
-//                    , vars.enc_actual[findex*4 + 2], vars.enc_actual[findex*4 + 3]);
+               // printf(">CAN(%d): Encoder[%d] Count : %6d %6d %6d %6d\n"
+               //     , CAN_Ch, findex
+               //     , vars.enc_actual[findex*4 + 0], vars.enc_actual[findex*4 + 1]
+               //     , vars.enc_actual[findex*4 + 2], vars.enc_actual[findex*4 + 3]);
 
                 if (data_return == (0x01 | 0x02 | 0x04 | 0x08))
                 {                    
@@ -286,12 +252,12 @@ static void* ioThreadProc(void* inst)
                         q[i] = (double)(vars.enc_actual[i])*(333.3/65536.0)*(3.141592/180.0);
                     }
 
-                    // print joint angles
-//                    for (int i=0; i<4; i++)
-//                    {
-//                        printf(">CAN(%d): Joint[%d] Pos : %5.1f %5.1f %5.1f %5.1f\n"
-//                            , CAN_Ch, i, q[i*4+0]*RAD2DEG, q[i*4+1]*RAD2DEG, q[i*4+2]*RAD2DEG, q[i*4+3]*RAD2DEG);
-//                    }
+                   //  print joint angles
+                   // for (int i=0; i<4; i++)
+                   // {
+                   //     printf(">CAN(%d): Joint[%d] Pos : %5.1f %5.1f %5.1f %5.1f\n"
+                   //         , CAN_Ch, i, q[i*4+0]*RAD2DEG, q[i*4+1]*RAD2DEG, q[i*4+2]*RAD2DEG, q[i*4+3]*RAD2DEG);
+                   // }
 
                     /* Updated code for velocity filter, torque mode option, and safety */
 
@@ -334,7 +300,6 @@ static void* ioThreadProc(void* inst)
                         {
                             // std::cout << std::setprecision(2) << joint_positions.segment(4 * i, 4).transpose() << std::endl;
                             // std::cout << std::setprecision(2) << joint_velocities.segment(4 * i, 4).transpose() << std::endl;
-
                         }
                     }
 
@@ -369,6 +334,9 @@ static void* ioThreadProc(void* inst)
                         driver_ready = true;
                         redis_client.set(ALLEGRO_DRIVER_READY, "1");  // std::stoi() from the controller side 
                     }
+                    // ----------------------
+                    //    Torque Control
+                    // ----------------------
                     else if (control_mode == TORQUE_MODE)
                     {
                         for (int i = 0; i < MAX_DOF; i++)
@@ -377,43 +345,35 @@ static void* ioThreadProc(void* inst)
                         }
                         redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  // set the current hand configuration as the current desired position 
                     }
+                    // ----------------------
+                    //    Position control     (with predefined grasps option)
+                    // ----------------------
                     else if (control_mode == POSITION_MODE)
                     {
-                        if (hand_pos_predefined == HAND_GRASP1)
-                        {
-                            cout << "mode" << hand_pos_predefined << endl;
-                            for (int i = 0; i < MAX_DOF; i++)
-                            {
-                                joint_positions_commanded[i] = pos1[i]; 
-                                kp_variable[i] = kp1[i];
-                                kv_variable[i] = kv1[i];
-                            }
+                        try{
+                            printf("Setting grasp to: %s", predefined_grasp.c_str());
+                            SetGraspAndGains(predefined_grasp, kp, kv);
                         }
-                        else if (hand_pos_predefined == HAND_GRASP2)
-                        {
-                            for (int i = 0; i < MAX_DOF; i++)
-                            {
-                                joint_positions_commanded[i] = pos2[i]; 
-                                kp_variable[i] = kp1[i];
-                                kv_variable[i] = kv1[i];
-                            }
-                        }
-                        else
-                        {
-                            for (int i = 0; i < MAX_DOF; i++)
-                            {
+                        catch(exception e){
+                            cout << "The grasp name is not valid" << endl;
+                            cout << "Holding position and using default gains" << endl;
+                            cout << endl;
+
+                            for (int i = 0; i < MAX_DOF; i++){     
                                 joint_positions_commanded[i] = q[i]; 
-                                kp_variable[i] = kp_default[i];
-                                kv_variable[i] = kv_default[i];
+                                kp[i] = kp_default[i];
+                                kv[i] = kv_default[i];
                             }
                         }
                         
                         for (int i = 0; i < MAX_DOF; i++)
                         {
-                            tau_des[i] = - kp_default[i] * (q[i] - joint_positions_commanded(i)) - kv_default[i] * dq[i] + gravity_torque[i];                            
+                            tau_des[i] = - kp[i] * (q[i] - joint_positions_commanded(i)) - kv[i] * dq[i] + gravity_torque[i];                            
                         }
                     }
-                    
+                    // -------------------------
+                    //    Gravity Compensation
+                    // -------------------------
                     else  
                     {
                         for (int i = 0; i < MAX_DOF; i++)
@@ -601,6 +561,8 @@ bool OpenCAN()
     return true;
 }
 
+
+
 /////////////////////////////////////////////////////////////////////////////////////////
 // Close CAN data channel
 void CloseCAN()
@@ -671,11 +633,20 @@ void PrintInstruction()
     printf("   1: Position control\n");
     printf("   2: Gravity compensation\n\n\n");
 
-    printf(">> Redis key to switch control: \n   set \"allegroHand::controller::control_mode\" mode_#\n\n");
-    printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
-    printf(">> Redis key to set joint positions: \n   set \"allegroHand::controller::joint_positions_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
-    printf(">> Redis key to set palm orientation: \n   set \"allegroHand::controller::palm_orientation\" \"[[0,0,1],[0,1,0],[-1,0,0]]\"\n\n");
+    printf(">> Predefined grasps:\n");
+    printf("   -- 1st: Set to position control\n");
+    printf("   -- 2nd: Set predefined grasp name (see below)\n\n\n");
 
+    printf(">> Redis key to switch control: \n   set \"allegroHand::controller::control_mode\" mode_#\n\n");
+    // printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
+    printf(">> Redis key to set joint positions: \n   set \"allegroHand::controller::joint_positions_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
+    // printf(">> Redis key to set palm orientation: \n   set \"allegroHand::controller::palm_orientation\" \"[[0,0,1],[0,1,0],[-1,0,0]]\"\n\n");
+    printf(">> Redis key to set predefined grasps: \n   set \"allegroHand::controller::predefined_grasp\" \"grasp_name\"\n\n\n");
+
+    printf(">> Predefined grasp names\n");
+    printf("   home\n");
+    printf("   ready\n");
+    printf("   clyde_bottle_envelope\n");
     printf("--------------------------------------------------\n\n");
 
 }
