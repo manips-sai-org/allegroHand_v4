@@ -1,8 +1,3 @@
-//
-// 20141209: kcchang: changed window version to linux 
-
-// myAllegroHand.cpp : Defines the entry point for the console application.
-//
 #include <stdio.h>
 #include <stdint.h>
 #include <unistd.h>
@@ -67,18 +62,9 @@ double R_palm_c[] = {
 VectorXd joint_torques_commanded = VectorXd::Zero(MAX_DOF);
 VectorXd joint_positions_commanded = VectorXd::Zero(MAX_DOF);
 
-double kp[] = {
-    5.0, 5.0, 5.0, 5.0,
-    5.0, 5.0, 5.0, 5.0,
-    5.0, 5.0, 5.0, 5.0,
-    2.5, 2.5, 2.5, 2.5 //thumb
-};
-double kv[] = {
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09,
-    0.09, 0.09, 0.09, 0.09
-};
+// Initial default position control gain values 
+MatrixXd kp_pos = MatrixXd::Identity(4, 4);
+MatrixXd kv_pos = MatrixXd::Identity(4, 4);
 
 const bool average_filter = true;  // moving average filter for velocity 
 int buffer_size = 10;  
@@ -174,10 +160,10 @@ static void* ioThreadProc(void* inst)
     redis_client.setEigenMatrixJSON(ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
     redis_client.setEigenMatrixJSON(ALLEGRO_PALM_ORIENTATION, R_palm);
 
-    // Initial default gain values 
-    MatrixXd kp_to_redis = MatrixXd::Constant(4, 4, 5.0);
-    kp_to_redis.row(3).setConstant(2.5);
-    MatrixXd kv_to_redis = MatrixXd::Constant(4, 4, 0.09);
+    // Initial default position control gain values 
+    kp_pos = MatrixXd::Constant(4, 4, 5.0);
+    kp_pos.row(3).setConstant(2.5);
+    kv_pos = MatrixXd::Constant(4, 4, 0.09);
 
     for (int i = 0; i < MAX_DOF; i++) {
         joint_positions(i) = q[i];  // startup value is 0 for q (default) : this is redundant 
@@ -185,8 +171,8 @@ static void* ioThreadProc(void* inst)
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_POSITIONS, joint_positions);
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
     redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  
-    redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KP, kp_to_redis);
-    redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KV, kv_to_redis);  
+    redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KP, kp_pos);
+    redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KV, kv_pos);  
     redis_client.set(ALLEGRO_DRIVER_READY, "0");  // set to driver not ready (false)
 
 
@@ -196,8 +182,8 @@ static void* ioThreadProc(void* inst)
     redis_client.addEigenToReadCallback(0, ALLEGRO_TORQUE_COMMANDED, joint_torques_commanded);
     redis_client.addEigenToReadCallback(0, ALLEGRO_POSITION_COMMANDED, joint_positions_commanded);
     redis_client.addEigenToReadCallback(0, ALLEGRO_PALM_ORIENTATION, R_palm);
-    redis_client.addEigenToReadCallback(0, ALLEGRO_GRASP_KP, kp_to_redis);
-    redis_client.addEigenToReadCallback(0, ALLEGRO_GRASP_KV, kv_to_redis);
+    redis_client.addEigenToReadCallback(0, ALLEGRO_GRASP_KP, kp_pos);
+    redis_client.addEigenToReadCallback(0, ALLEGRO_GRASP_KV, kv_pos);
 
     redis_client.createWriteCallback(0);
     redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_POSITIONS, joint_positions);
@@ -211,10 +197,10 @@ static void* ioThreadProc(void* inst)
         /* wait for the event */
         while (0 == get_message(CAN_Ch, &id, &len, data, FALSE))
         {
-//            printf(">CAN(%d): ", CAN_Ch);
-//            for(int nd=0; nd<len; nd++)
-//                printf("%02x ", data[nd]);
-//            printf("\n");
+            //            printf(">CAN(%d): ", CAN_Ch);
+            //            for(int nd=0; nd<len; nd++)
+            //                printf("%02x ", data[nd]);
+            //            printf("\n");
 
             switch (id)
             {
@@ -250,10 +236,10 @@ static void* ioThreadProc(void* inst)
                 data_return |= (0x01 << (findex));
                 recvNum++;
 
-//                printf(">CAN(%d): Encoder[%d] Count : %6d %6d %6d %6d\n"
-//                    , CAN_Ch, findex
-//                    , vars.enc_actual[findex*4 + 0], vars.enc_actual[findex*4 + 1]
-//                    , vars.enc_actual[findex*4 + 2], vars.enc_actual[findex*4 + 3]);
+                //                printf(">CAN(%d): Encoder[%d] Count : %6d %6d %6d %6d\n"
+                //                    , CAN_Ch, findex
+                //                    , vars.enc_actual[findex*4 + 0], vars.enc_actual[findex*4 + 1]
+                //                    , vars.enc_actual[findex*4 + 2], vars.enc_actual[findex*4 + 3]);
 
                 if (data_return == (0x01 | 0x02 | 0x04 | 0x08))
                 {                    
@@ -265,11 +251,11 @@ static void* ioThreadProc(void* inst)
                     }
 
                     // print joint angles
-//                    for (int i=0; i<4; i++)
-//                    {
-//                        printf(">CAN(%d): Joint[%d] Pos : %5.1f %5.1f %5.1f %5.1f\n"
-//                            , CAN_Ch, i, q[i*4+0]*RAD2DEG, q[i*4+1]*RAD2DEG, q[i*4+2]*RAD2DEG, q[i*4+3]*RAD2DEG);
-//                    }
+                    //                    for (int i=0; i<4; i++)
+                    //                    {
+                    //                        printf(">CAN(%d): Joint[%d] Pos : %5.1f %5.1f %5.1f %5.1f\n"
+                    //                            , CAN_Ch, i, q[i*4+0]*RAD2DEG, q[i*4+1]*RAD2DEG, q[i*4+2]*RAD2DEG, q[i*4+3]*RAD2DEG);
+                    //                    }
 
                     /* Updated code for velocity filter, torque mode option, and safety */
 
@@ -359,7 +345,7 @@ static void* ioThreadProc(void* inst)
                     {
                         for (int i = 0; i < MAX_DOF; i++)
                         {
-                            tau_des[i] = - kp[i] * (q[i] - joint_positions_commanded(i)) - kv[i] * dq[i] + gravity_torque[i];  
+                            tau_des[i] = - kp_pos(i) * (q[i] - joint_positions_commanded(i)) - kv_pos(i) * dq[i] + gravity_torque[i];  
                         }
                     }
                     else  
@@ -445,7 +431,7 @@ void MainLoop()
     bool bRun = true;
 
     // Set control gains (if using the private library)
-    // pBHand->SetGainsEx(kp_default, kv_default); 
+    // pBHand->SetGainsEx(kp_default, kv_default); // kp_default and kv_default are arrays of doubles of size 16
 
     // Main loop 
     int cnt = 0;
@@ -620,10 +606,20 @@ void PrintInstruction()
     printf("   2: Gravity compensation\n\n\n");
 
     printf(">> Redis key to switch control: \n   set \"allegroHand::controller::control_mode\" mode_#\n\n");
-    // printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
     printf(">> Redis key to set joint positions: \n   set \"allegroHand::controller::joint_positions_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
+    printf(">> Redis key to set kp: \n   set \"allegroHand::controller::grasp_kp\" \"[[5.000000,5.000000,5.000000,5.000000],[5.000000,5.000000,5.000000,5.000000],[5.000000,5.000000,5.000000,5.000000],[2.500000,2.500000,2.500000,2.500000]]\"\n\n");
+    printf(">> Redis key to set kv: \n   set \"allegroHand::controller::grasp_kv\" \"[[0.090000,0.090000,0.090000,0.090000],[0.090000,0.090000,0.090000,0.090000],[0.090000,0.090000,0.090000,0.090000],[0.090000,0.090000,0.090000,0.090000]]\"\n\n\n");
+    // printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
     // printf(">> Redis key to set palm orientation: \n   set \"allegroHand::controller::palm_orientation\" \"[[0,0,1],[0,1,0],[-1,0,0]]\"\n\n");
+    
+    printf("--------------------------------------------------\n\n");
 
+    printf(">> PREDEFINED GRASPS \n\n");
+    printf("set \"allegroHand::controller::control_mode\" 1\n\n");
+    printf("<HOME> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.094000,0.264248,0.001331,0.905473,0.062134,0.211345,0.122759,1.074300,0.069945,0.417897,0.051660,1.041635,1.280231,0.145660,0.261052,0.395795]\"\n\n");
+    printf("<READY> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.044559,0.657735,0.275965,0.908136,0.115747,0.763629,0.135364,0.903431,0.060359,0.731675,0.105539,1.031250,1.200877,0.334371,0.538792,0.038967]\"\n\n");
+    printf("<CLYDE/BONNIE_ENVELOPE_BOTTLE> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.203978,1.342276,0.850173,0.530005,-0.087698,1.424116,0.468758,1.063294,-0.129239,1.354526,0.643000,0.879998,1.432282,0.048820,0.388250,0.894644]\"\n\n");
+    
     printf("--------------------------------------------------\n\n");
 
 }

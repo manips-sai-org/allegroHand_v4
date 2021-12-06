@@ -11,7 +11,7 @@ Note that this project works only for PEAK System CAN interface (chardev) for US
 
 Inertial Frame and Joints
 ======================
-![hand conventions](https://github.com/manips-sai-org/allegroHand_v4/blob/master/handConventions.png)
+![hand conventions](https://github.com/manips-sai-org/allegroHand_v4/blob/master/imgs_readme/handConventions.png)
 
 Required libraries
 ======================
