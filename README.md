@@ -13,6 +13,10 @@ Inertial Frame and Joints
 ======================
 ![hand conventions](https://github.com/manips-sai-org/allegroHand_v4/blob/master/imgs_readme/handConventions.png)
 
+<!-- Inertial Frame and Joints
+====================== -->
+![joing numbering](https://github.com/manips-sai-org/allegroHand_v4/blob/master/imgs_readme/handJointNumbers.jpg)
+
 Required libraries
 ======================
 
