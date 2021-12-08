@@ -343,6 +343,10 @@ static void* ioThreadProc(void* inst)
                     }
                     else if (control_mode == POSITION_MODE)
                     {
+                        // pBHand->SetJointPosition(q);
+                        // q_des = redis key value
+                        // pBHand->SetJointDesiredPosition(q_des);  // enforcing 0 position error to only extract gravity torque
+                        // pBHand->UpdateControl(0);
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             tau_des[i] = - kp_pos(i) * (q[i] - joint_positions_commanded(i)) - kv_pos(i) * dq[i] + gravity_torque[i];  
@@ -606,7 +610,8 @@ void PrintInstruction()
     printf("   2: Gravity compensation\n\n\n");
 
     printf(">> Redis key to switch control: \n   set \"allegroHand::controller::control_mode\" mode_#\n\n");
-    printf(">> Redis key to set joint positions: \n   set \"allegroHand::controller::joint_positions_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
+    printf(">> Redis key to SET joint positions: \n   set \"allegroHand::controller::joint_positions_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
+    printf(">> Redis key to GET joint positions: \n   get \"allegroHand::sensors::joint_positions\"\n\n");
     printf(">> Redis key to set kp: \n   set \"allegroHand::controller::grasp_kp\" \"[[5.000000,5.000000,5.000000,5.000000],[5.000000,5.000000,5.000000,5.000000],[5.000000,5.000000,5.000000,5.000000],[2.500000,2.500000,2.500000,2.500000]]\"\n\n");
     printf(">> Redis key to set kv: \n   set \"allegroHand::controller::grasp_kv\" \"[[0.090000,0.090000,0.090000,0.090000],[0.090000,0.090000,0.090000,0.090000],[0.090000,0.090000,0.090000,0.090000],[0.090000,0.090000,0.090000,0.090000]]\"\n\n\n");
     // printf(">> Redis key to set joint torques: \n   set \"allegroHand::controller::joint_torques_commanded\" \"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]\"\n\n");
@@ -617,10 +622,12 @@ void PrintInstruction()
     printf(">> PREDEFINED GRASPS \n\n");
     printf("set \"allegroHand::controller::control_mode\" 1\n\n");
     printf("<HOME> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.094000,0.264248,0.001331,0.905473,0.062134,0.211345,0.122759,1.074300,0.069945,0.417897,0.051660,1.041635,1.280231,0.145660,0.261052,0.395795]\"\n\n");
-    printf("<READY> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.044559,0.657735,0.275965,0.908136,0.115747,0.763629,0.135364,0.903431,0.060359,0.731675,0.105539,1.031250,1.200877,0.334371,0.538792,0.038967]\"\n\n");
+    // printf("<READY> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.044559,0.657735,0.275965,0.908136,0.115747,0.763629,0.135364,0.903431,0.060359,0.731675,0.105539,1.031250,1.200877,0.334371,0.538792,0.038967]\"\n\n");
     printf("<BONNIE/CLYDE_BOTTLE> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.203978,1.342276,0.850173,0.530005,-0.087698,1.424116,0.468758,1.063294,-0.129239,1.354526,0.643000,0.879998,1.432282,0.048820,0.388250,0.894644]\"\n\n");
-    printf("<CLYDE_CAP> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.256703,0.610779,0.621875,1.624809,-0.058051,0.624271,0.460414,1.186497,-0.215783,0.734426,0.295226,0.557876,1.110338,0.417098,0.831622,0.576428]\"\n\n");
-    printf("<CLYDE_LIGHTBULB> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.003906,1.040215,0.305967,1.161022,-0.036925,0.803484,0.420116,1.236914,0.004438,0.189864,0.180811,0.714455,1.269402,0.584505,0.642734,0.393398]\"\n\n");
+    // printf("<CLYDE_CAP> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.256703,0.610779,0.621875,1.624809,-0.058051,0.624271,0.460414,1.186497,-0.215783,0.734426,0.295226,0.557876,1.110338,0.417098,0.831622,0.576428]\"\n\n");
+    printf("<READY_4_CAP> \nset \"allegroHand::controller::joint_positions_commanded\" \"[-0.534798,0.681523,0.140956,1.011900,0.199540,0.705134,0.069235,0.951008,0.104918,0.128085,0.371563,0.619567,0.985892,0.674245,0.564534,0.287770]\"\n\n");
+    printf("<CAP> \nset \"allegroHand::controller::joint_positions_commanded\" \"[-0.233447,0.610779,0.621875,1.348756,0.045713,0.624271,0.460414,1.186497,0.233270,0.514294,-0.017131,0.525212,1.110338,0.417098,0.831622,0.576428]\"\n\n");
+    // printf("<CLYDE_LIGHTBULB> \nset \"allegroHand::controller::joint_positions_commanded\" \"[0.003906,1.040215,0.305967,1.161022,-0.036925,0.803484,0.420116,1.236914,0.004438,0.189864,0.180811,0.714455,1.269402,0.584505,0.642734,0.393398]\"\n\n");
     
     printf("--------------------------------------------------\n\n");
 
