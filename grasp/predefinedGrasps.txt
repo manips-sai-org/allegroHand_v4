@@ -33,10 +33,10 @@ set "allegroHand::controller::joint_positions_commanded" "[0.203978,1.342276,0.8
 #------- CLYDE
 
 # Clyde, Ready cap larger 
-set "allegroHand::controller::joint_positions_commanded" "[0.534798,0.681523,0.140956,1.011900,-0.199540,0.705134,0.069235,0.951008,0.104918,0.128085,0.371563,0.619567,0.985892,0.674245,0.564534,0.287770]"
+set "allegroHand::controller::joint_positions_commanded" "[0.534798,0.681523,0.140956,1.011900,-0.199540,0.705134,0.069235,0.951008,-0.104918,0.128085,0.371563,0.619567,0.985892,0.674245,0.564534,0.287770]"
 
 # Clyde, 3 finger (pinky up), Medium Cap -- yellow adapter w/ pink foam
-set "allegroHand::controller::joint_positions_commanded" "[0.233447,0.610779,0.621875,1.348756,-0.045713,0.624271,0.460414,1.186497,0.233270,0.514294,-0.017131,0.525212,1.110338,0.417098,0.831622,0.576428]"
+set "allegroHand::controller::joint_positions_commanded" "[0.233447,0.610779,0.621875,1.348756,-0.045713,0.624271,0.460414,1.186497,-0.233270,0.514294,-0.017131,0.525212,1.110338,0.417098,0.831622,0.576428]"
 
 # Clyde, 3 finger (pinky up), Medium Cap -- old
 # set "allegroHand::controller::joint_positions_commanded" "[0.256703,0.610779,0.621875,1.624809,-0.058051,0.624271,0.460414,1.186497,-0.215783,0.734426,0.295226,0.557876,1.110338,0.417098,0.831622,0.576428]"
