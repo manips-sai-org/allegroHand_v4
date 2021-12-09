@@ -1,6 +1,6 @@
 Allegro Hand V4 - Redis Driver
 ==========================
-This driver interfaces with the Allegro Hand through **Redis** (https://redis.io/)<br /> 
+This driver interfaces with the Allegro Hand through **Redis** (https://redis.io/)<br />
 Note that this project works only for PEAK System CAN interface (chardev) for USB: PCAN-USB
 
 ## Resources: 
@@ -20,21 +20,35 @@ Inertial Frame and Joints
 Required libraries
 ======================
 
-1. Download, build, and install PCAN-USB driver for Linux: libpcan
+1. Install necessary packages.
+```
+sudo apt-get install cmake gcc g++ libpopt-dev
+```
+
+2. Download, build, and install PCAN-USB driver for Linux: [peak-linux-driver](http://www.peak-system.com/fileadmin/media/linux/index.htm#download). Note: v8.8.0 tested.
 ```
 tar -xzvf peak-linux-driver-x.x.tar.gz
 cd peak-linux-driver-x.x
 make NET=NO
 sudo make install
+sudo modprobe pcan
 ```
-2. Download, build, and install PCAN-Basic API for Linux: libpcanbasic
+
+3. Download, build, and install PCAN-Basic API for Linux: [peak-basic-api](http://www.peak-system.com/fileadmin/media/linux/index.htm#download). Note: v4.2.0 is tested.
 ```
 tar -xzvf PCAN_Basic_Linux-x.x.x.tar.gz
 cd PCAN_Basic_Linux-x.x.x/pcanbasic
 make
 sudo make install
 ```
-3. Download, build, and install Grasping Library for Linux, "libBHand": Grasping_Library_for_Linux
+
+4. Download, build, and install Grasping Library for Linux, "libBHand": [Grasping_Library_for_Linux](http://wiki.wonikrobotics.com/AllegroHandWiki/index.php/Grasping_Library_for_Linux)
+```
+unzip LibBHand_{32|64}.zip
+cd libBHand_{32|64}
+sudo make install
+sudo ldconfig
+```
 
 Build the driver: "grasp"
 ======================
@@ -60,6 +74,3 @@ cd bin/
 3. Power on Allegro Hand
 4. Start a redis client in a new terminal: ```redis-cli```
 4. Use redis keys to move Allegro Hand
-
-
-
