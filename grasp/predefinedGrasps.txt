@@ -27,20 +27,32 @@ set "allegroHand::controller::joint_positions_commanded" "[0.044559,0.657735,0.2
 #------------------------
 #------- Bottle and cap 
 #------------------------
-# Ready cap
-set "allegroHand::controller::joint_positions_commanded" "[-0.426773,0.530804,0.277917,1.030895,0.105184,0.568705,0.356739,1.173537,0.060359,0.731675,0.105539,1.031250,1.095515,0.547580,0.449497,0.234867]"
-
-# Ready cap larger (WORKS FOR REGRASPING)
-set "allegroHand::controller::joint_positions_commanded" "[-0.534798,0.681523,0.140956,1.011900,0.199540,0.705134,0.069235,0.951008,0.104918,0.128085,0.371563,0.619567,0.985892,0.674245,0.564534,0.287770]"
-
-# Clyde, envelope, bottle
+# Clyde or Bonnie, envelope, bottle
 set "allegroHand::controller::joint_positions_commanded" "[0.203978,1.342276,0.850173,0.530005,-0.087698,1.424116,0.468758,1.063294,-0.129239,1.354526,0.643000,0.879998,1.432282,0.048820,0.388250,0.894644]"
 
-# Clyde, 3 finger (pinky up), Medium Cap
+#------- CLYDE
+
+# Clyde, Ready cap larger 
+set "allegroHand::controller::joint_positions_commanded" "[0.534798,0.681523,0.140956,1.011900,-0.199540,0.705134,0.069235,0.951008,0.104918,0.128085,0.371563,0.619567,0.985892,0.674245,0.564534,0.287770]"
+
+# Clyde, 3 finger (pinky up), Medium Cap -- yellow adapter w/ pink foam
+set "allegroHand::controller::joint_positions_commanded" "[0.233447,0.610779,0.621875,1.348756,-0.045713,0.624271,0.460414,1.186497,0.233270,0.514294,-0.017131,0.525212,1.110338,0.417098,0.831622,0.576428]"
+
+# Clyde, 3 finger (pinky up), Medium Cap -- old
 # set "allegroHand::controller::joint_positions_commanded" "[0.256703,0.610779,0.621875,1.624809,-0.058051,0.624271,0.460414,1.186497,-0.215783,0.734426,0.295226,0.557876,1.110338,0.417098,0.831622,0.576428]"
 
-# Bonnie, 3 finger (pinky up), Medium Cap -- yellow adapter (WORKS FOR REGRASPING)
+# ------- BONNIE
+
+# <<  WORKS FOR REGRASPING  >>
+# Bonnie, Ready cap larger 
+set "allegroHand::controller::joint_positions_commanded" "[-0.534798,0.681523,0.140956,1.011900,0.199540,0.705134,0.069235,0.951008,0.104918,0.128085,0.371563,0.619567,0.985892,0.674245,0.564534,0.287770]"
+
+# <<  WORKS FOR REGRASPING   >>
+# Bonnie, 3 finger (pinky up), Medium Cap -- yellow adapter w/ pink foam
 set "allegroHand::controller::joint_positions_commanded" "[-0.233447,0.610779,0.621875,1.348756,0.045713,0.624271,0.460414,1.186497,0.233270,0.514294,-0.017131,0.525212,1.110338,0.417098,0.831622,0.576428]"
+
+# Bonnie, Ready cap
+# set "allegroHand::controller::joint_positions_commanded" "[-0.426773,0.530804,0.277917,1.030895,0.105184,0.568705,0.356739,1.173537,0.060359,0.731675,0.105539,1.031250,1.095515,0.547580,0.449497,0.234867]"
 
 # Bonnie, 3 finger (pinky up), Medium Cap -- old
 # set "allegroHand::controller::joint_positions_commanded" "[-0.308186,0.692885,0.388161,1.262833,-0.360112,0.634213,0.557788,1.318488,-0.209659,0.210191,0.318127,0.868814,1.446129,0.417276,1.212327,-0.267000]"
