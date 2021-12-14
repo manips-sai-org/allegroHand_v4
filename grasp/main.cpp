@@ -41,6 +41,7 @@ const string ALLEGRO_GRASP_KV = "allegroHand::controller::grasp_kv";
 const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions";
 const string ALLEGRO_CURRENT_VELOCITIES = "allegroHand::sensors::joint_velocities";
 const string ALLEGRO_DRIVER_READY = "allegroHand::controller::driver_ready";
+const string ALLEGRO_DESIRED_TORQUES = "allegroHand::controller::tau_des"; // desired joint torques sent to hand control library
 
 
 // Setup control modes 
@@ -61,6 +62,7 @@ double R_palm_c[] = {
 };
 VectorXd joint_torques_commanded = VectorXd::Zero(MAX_DOF);
 VectorXd joint_positions_commanded = VectorXd::Zero(MAX_DOF);
+VectorXd tau_des_to_redis = VectorXd::Zero(MAX_DOF);
 
 // Initial default position control gain values 
 MatrixXd kp_pos = MatrixXd::Identity(4, 4);
@@ -188,6 +190,7 @@ static void* ioThreadProc(void* inst)
     redis_client.createWriteCallback(0);
     redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_POSITIONS, joint_positions);
     redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
+    redis_client.addEigenToWriteCallback(0, ALLEGRO_DESIRED_TORQUES, tau_des_to_redis);
 
     // Initial starting behavior
     pBHand->SetMotionType(eMotionType_GRAVITY_COMP);
@@ -313,6 +316,9 @@ static void* ioThreadProc(void* inst)
                         R_palm_c[i] = R_palm(i);
                     }
 
+                    // send controller computed torques to redis
+                    tau_des_to_redis = Eigen::Map<Eigen::VectorXd>(tau_des, MAX_DOF);
+
                     pBHand->SetOrientation(R_palm_c);  // for gravity vector direction wrt palm
                     pBHand->SetJointPosition(q);
                     pBHand->SetJointDesiredPosition(q);  // enforcing 0 position error to only extract gravity torque
@@ -333,6 +339,9 @@ static void* ioThreadProc(void* inst)
                         driver_ready = true;
                         redis_client.set(ALLEGRO_DRIVER_READY, "1");  // std::stoi() from the controller side 
                     }
+                    // ------------------
+                    // Torque control
+                    // ------------------
                     else if (control_mode == TORQUE_MODE)
                     {
                         for (int i = 0; i < MAX_DOF; i++)
@@ -341,6 +350,9 @@ static void* ioThreadProc(void* inst)
                         }
                         redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  // set the current hand configuration as the current desired position 
                     }
+                    // ------------------
+                    // Position control
+                    // ------------------
                     else if (control_mode == POSITION_MODE)
                     {
                         // pBHand->SetJointPosition(q);
@@ -352,6 +364,9 @@ static void* ioThreadProc(void* inst)
                             tau_des[i] = - kp_pos(i) * (q[i] - joint_positions_commanded(i)) - kv_pos(i) * dq[i] + gravity_torque[i];  
                         }
                     }
+                    // ---------------------
+                    // Gravity compensation
+                    // ---------------------
                     else  
                     {
                         for (int i = 0; i < MAX_DOF; i++)
