@@ -1,6 +1,6 @@
 # create an executable in bin/
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
-add_executable (grasp main.cpp canAPI.cpp RockScissorsPaper.cpp RedisClient.cpp)
+add_executable (grasp main.cpp canAPI.cpp RockScissorsPaper.cpp RedisClient.cpp predefinedGrasps.cpp)
 
 # and link the library against the executable
 target_link_libraries (grasp BHand pcanbasic pthread ${REDIS_LIBRARY})

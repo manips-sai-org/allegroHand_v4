@@ -64,6 +64,19 @@ double kv[] = {
     0.09, 0.09, 0.09, 0.09
 };
 
+double kp_default[] = {
+    5.0, 5.0, 5.0, 5.0,
+    5.0, 5.0, 5.0, 5.0,
+    5.0, 5.0, 5.0, 5.0,
+    2.5, 2.5, 2.5, 2.5 //thumb
+};
+double kv_default[] = {
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09,
+    0.09, 0.09, 0.09, 0.09
+};
+
 VectorXd joint_positions = VectorXd::Zero(MAX_DOF);
 VectorXd joint_velocities = VectorXd::Zero(MAX_DOF);
 MatrixXd R_palm = MatrixXd::Identity(3, 3);
@@ -351,8 +364,12 @@ static void* ioThreadProc(void* inst)
                     else if (control_mode == POSITION_MODE)
                     {
                         try{
-                            printf("Setting grasp to: %s", predefined_grasp.c_str());
+                            printf("Setting grasp to: %s \n", predefined_grasp.c_str());
                             SetGraspAndGains(predefined_grasp, kp, kv);
+                            for (int i = 0; i < MAX_DOF; i++)
+                            {
+                                tau_des[i] = - kp[i] * (q[i] - q_des[i]) - kv[i] * dq[i] + gravity_torque[i];                            
+                            }
                         }
                         catch(exception e){
                             cout << "The grasp name is not valid" << endl;
@@ -363,12 +380,8 @@ static void* ioThreadProc(void* inst)
                                 joint_positions_commanded[i] = q[i]; 
                                 kp[i] = kp_default[i];
                                 kv[i] = kv_default[i];
+                                tau_des[i] = - kp[i] * (q[i] - joint_positions_commanded(i)) - kv[i] * dq[i] + gravity_torque[i];                            
                             }
-                        }
-                        
-                        for (int i = 0; i < MAX_DOF; i++)
-                        {
-                            tau_des[i] = - kp[i] * (q[i] - joint_positions_commanded(i)) - kv[i] * dq[i] + gravity_torque[i];                            
                         }
                     }
                     // -------------------------
