@@ -6,7 +6,6 @@
 #include <pthread.h>
 #include "canAPI.h"
 #include "rDeviceAllegroHandCANDef.h"
-#include "RockScissorsPaper.h"
 #include <BHand/BHand.h>
 
 #include "RedisClient.h"
@@ -36,6 +35,8 @@ const string ALLEGRO_POSITION_COMMANDED = "allegroHand::controller::joint_positi
 const string ALLEGRO_PALM_ORIENTATION = "allegroHand::controller::palm_orientation";
 const string ALLEGRO_GRASP_KP = "allegroHand::controller::grasp_kp";
 const string ALLEGRO_GRASP_KV = "allegroHand::controller::grasp_kv";
+const string ALLEGRO_BHAND_POS_KP = "allegroHand::controller::bhand_pos_kp";
+const string ALLEGRO_BHAND_POS_KD = "allegroHand::controller::bhand_pos_kd";
 
 // Write
 const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions";
@@ -48,7 +49,7 @@ const string ALLEGRO_DESIRED_TORQUES = "allegroHand::controller::tau_des"; // de
 const int TORQUE_MODE = 0;
 const int POSITION_MODE = 1;
 const int GRAVITY_MODE = 2; 
-const int REAL_POS_MODE_TEST = 3;
+const int BHAND_POS_MODE = 3;
 int control_mode = GRAVITY_MODE;  // initialize starting control mode
 bool driver_ready = false;  // initialize driver not ready 
 
@@ -68,6 +69,8 @@ VectorXd tau_des_to_redis = VectorXd::Zero(MAX_DOF);
 // Initial default position control gain values 
 MatrixXd kp_pos = MatrixXd::Identity(4, 4);
 MatrixXd kv_pos = MatrixXd::Identity(4, 4);
+MatrixXd bhand_pos_kp = MatrixXd::Identity(4, 4);
+MatrixXd bhand_pos_kd = MatrixXd::Identity(4, 4);
 
 const bool average_filter = true;  // moving average filter for velocity 
 int buffer_size = 10;  
@@ -168,6 +171,16 @@ static void* ioThreadProc(void* inst)
     kp_pos.row(3).setConstant(2.5);
     kv_pos = MatrixXd::Constant(4, 4, 0.09);
 
+    // Initial default Bhand_Positional Control Gain Values
+    bhand_pos_kp << 500, 800, 900, 500,
+                    500, 800, 900, 500,
+                    500, 800, 900, 500,
+                    1000, 700, 600, 600;
+    bhand_pos_kd << 25, 50, 55, 40,
+                    25, 50, 55, 40,
+                    25, 50, 55, 40,
+                    50, 50, 50, 40;
+
     for (int i = 0; i < MAX_DOF; i++) {
         joint_positions(i) = q[i];  // startup value is 0 for q (default) : this is redundant 
     }
@@ -175,7 +188,9 @@ static void* ioThreadProc(void* inst)
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
     redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  
     redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KP, kp_pos);
-    redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KV, kv_pos);  
+    redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KV, kv_pos);
+    redis_client.setEigenMatrixJSON(ALLEGRO_BHAND_POS_KP, bhand_pos_kp);
+    redis_client.setEigenMatrixJSON(ALLEGRO_BHAND_POS_KD, bhand_pos_kd);    
     redis_client.set(ALLEGRO_DRIVER_READY, "0");  // set to driver not ready (false)
 
 
@@ -187,6 +202,8 @@ static void* ioThreadProc(void* inst)
     redis_client.addEigenToReadCallback(0, ALLEGRO_PALM_ORIENTATION, R_palm);
     redis_client.addEigenToReadCallback(0, ALLEGRO_GRASP_KP, kp_pos);
     redis_client.addEigenToReadCallback(0, ALLEGRO_GRASP_KV, kv_pos);
+    redis_client.addEigenToReadCallback(0, ALLEGRO_BHAND_POS_KP, bhand_pos_kp);
+    redis_client.addEigenToReadCallback(0, ALLEGRO_BHAND_POS_KD, bhand_pos_kd);
 
     redis_client.createWriteCallback(0);
     redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_POSITIONS, joint_positions);
@@ -359,9 +376,7 @@ static void* ioThreadProc(void* inst)
                     {
                         pBHand->SetMotionType(eMotionType_GRAVITY_COMP);
                         // pBHand->SetJointPosition(q);
-                        // q_des = redis key value
-                        // pBHand->SetJointDesiredPosition(q_des);  // enforcing 0 position error to only extract gravity torque
-                        // pBHand->UpdateControl(0);
+                        // q_des = redis key valuepBHand->SetGainsEx(kp, kd); i++)
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             tau_des[i] = - kp_pos(i) * (q[i] - joint_positions_commanded(i)) - kv_pos(i) * dq[i] + gravity_torque[i];  
@@ -370,14 +385,14 @@ static void* ioThreadProc(void* inst)
                     // ------------------
                     // Testing BHand low-level Position control mode
                     // ------------------
-                    else if (control_mode == REAL_POS_MODE_TEST)
+                    else if (control_mode == BHAND_POS_MODE)
                     {
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             q_des[i] = joint_positions_commanded(i);
                         }
                         if (pBHand) pBHand->SetMotionType(eMotionType_JOINT_PD);
-                        SetGainsRSP();
+                        pBHand->SetGainsEx(bhand_pos_kp.data(), bhand_pos_kd.data());
                         ComputeTorque();
 
                     }
