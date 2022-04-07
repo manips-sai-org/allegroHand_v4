@@ -39,16 +39,22 @@ static double scissors[] = {
 extern BHand* pBHand;
 extern double q_des[MAX_DOF];
 
-static void SetGainsRSP()
+void SetGainsRSP()
 {
     // This function should be called after the function SetMotionType() is called.
     // Once SetMotionType() function is called, all gains are reset using the default values.
     if (!pBHand) return;
+    // double kp[] = {
+    //     500, 800, 900, 500,
+    //     500, 800, 900, 500,
+    //     500, 800, 900, 500,
+    //     1000, 700, 600, 600
+    // };
     double kp[] = {
-        500, 800, 900, 500,
-        500, 800, 900, 500,
-        500, 800, 900, 500,
-        1000, 700, 600, 600
+        1000, 1600, 1800, 1000,
+        1000, 1600, 1800, 1000,
+        1000, 1600, 1800, 1000,
+        2000, 1400, 1200, 1200
     };
     double kd[] = {
         25, 50, 55, 40,

@@ -48,6 +48,7 @@ const string ALLEGRO_DESIRED_TORQUES = "allegroHand::controller::tau_des"; // de
 const int TORQUE_MODE = 0;
 const int POSITION_MODE = 1;
 const int GRAVITY_MODE = 2; 
+const int REAL_POS_MODE_TEST = 3;
 int control_mode = GRAVITY_MODE;  // initialize starting control mode
 bool driver_ready = false;  // initialize driver not ready 
 
@@ -299,7 +300,7 @@ static void* ioThreadProc(void* inst)
                         // std::cout << "Control Mode: " << control_mode << std::endl;
                         for (int i = 0; i < 4; i++) 
                         {
-                            // std::cout << std::setprecision(2) << joint_positions.segment(4 * i, 4).transpose() << std::endl;
+                            // std::cout << std::setpreeMotionType_GRAVITY_COMPcision(2) << joint_positions.segment(4 * i, 4).transpose() << std::endl;
                             // std::cout << std::setprecision(2) << joint_velocities.segment(4 * i, 4).transpose() << std::endl;
 
                         }
@@ -344,6 +345,7 @@ static void* ioThreadProc(void* inst)
                     // ------------------
                     else if (control_mode == TORQUE_MODE)
                     {
+                        pBHand->SetMotionType(eMotionType_GRAVITY_COMP);
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             tau_des[i] = joint_torques_commanded(i) + gravity_torque[i]; 
@@ -355,6 +357,7 @@ static void* ioThreadProc(void* inst)
                     // ------------------
                     else if (control_mode == POSITION_MODE)
                     {
+                        pBHand->SetMotionType(eMotionType_GRAVITY_COMP);
                         // pBHand->SetJointPosition(q);
                         // q_des = redis key value
                         // pBHand->SetJointDesiredPosition(q_des);  // enforcing 0 position error to only extract gravity torque
@@ -364,11 +367,26 @@ static void* ioThreadProc(void* inst)
                             tau_des[i] = - kp_pos(i) * (q[i] - joint_positions_commanded(i)) - kv_pos(i) * dq[i] + gravity_torque[i];  
                         }
                     }
+                    // ------------------
+                    // Testing BHand low-level Position control mode
+                    // ------------------
+                    else if (control_mode == REAL_POS_MODE_TEST)
+                    {
+                        for (int i = 0; i < MAX_DOF; i++)
+                        {
+                            q_des[i] = joint_positions_commanded(i);
+                        }
+                        if (pBHand) pBHand->SetMotionType(eMotionType_JOINT_PD);
+                        SetGainsRSP();
+                        ComputeTorque();
+
+                    }
                     // ---------------------
                     // Gravity compensation
                     // ---------------------
                     else  
                     {
+                        pBHand->SetMotionType(eMotionType_GRAVITY_COMP);
                         for (int i = 0; i < MAX_DOF; i++)
                         {
                             tau_des[i] = gravity_torque[i];

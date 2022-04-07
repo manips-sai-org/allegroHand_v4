@@ -52,6 +52,9 @@ bin/
 
 *.rbd 
 
+# Visual Studio configuration
+.vscode/
+
 # Visual C++ cache files
 ipch/
 *.aps

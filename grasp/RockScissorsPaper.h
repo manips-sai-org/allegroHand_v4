@@ -4,5 +4,6 @@
 void MotionRock();
 void MotionScissors();
 void MotionPaper();
+void SetGainsRSP();
 
 #endif
