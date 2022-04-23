@@ -22,7 +22,8 @@ Required libraries
 
 1. Install necessary packages.
 ```
-sudo apt-get install cmake gcc g++ libpopt-dev libboost-all-dev libjsoncpp-dev redis-server libhiredis-dev 
+sudo apt-get install cmake gcc g++ libpopt-dev libboost-all-dev libjsoncpp-dev redis-server libhiredis-dev libeigen3-dev
+
 ```
 
 2. Download, build, and install PCAN-USB driver for Linux: [peak-linux-driver](http://www.peak-system.com/fileadmin/media/linux/index.htm#download). Note: v8.8.0 tested.
