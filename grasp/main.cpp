@@ -32,15 +32,16 @@ const struct timeval& timeout = {1, 500000};
 const string ALLEGRO_CONTROL_MODE = "allegroHand::controller::control_mode";
 const string ALLEGRO_TORQUE_COMMANDED = "allegroHand::controller::joint_torques_commanded";
 const string ALLEGRO_POSITION_COMMANDED = "allegroHand::controller::joint_positions_commanded";
+const string ALLEGRO_JOINT_TEMPS = "allegroHand::sensors::joint_temps";
 const string ALLEGRO_PALM_ORIENTATION = "allegroHand::controller::palm_orientation";
 const string ALLEGRO_GRASP_KP = "allegroHand::controller::grasp_kp";
 const string ALLEGRO_GRASP_KV = "allegroHand::controller::grasp_kv";
 const string ALLEGRO_BHAND_POS_KP = "allegroHand::controller::bhand_pos_kp";
-const string ALLEGRO_BHAND_POS_KD = "allegroHand::controller::bhand_pos_kd";
 
 // Write
 const string ALLEGRO_CURRENT_POSITIONS = "allegroHand::sensors::joint_positions";
 const string ALLEGRO_CURRENT_VELOCITIES = "allegroHand::sensors::joint_velocities";
+const string ALLEGRO_BHAND_POS_KD = "allegroHand::controller::bhand_pos_kd";
 const string ALLEGRO_DRIVER_READY = "allegroHand::controller::driver_ready";
 const string ALLEGRO_DESIRED_TORQUES = "allegroHand::controller::tau_des"; // desired joint torques sent to hand control library
 
@@ -65,6 +66,7 @@ double R_palm_c[] = {
 VectorXd joint_torques_commanded = VectorXd::Zero(MAX_DOF);
 VectorXd joint_positions_commanded = VectorXd::Zero(MAX_DOF);
 VectorXd tau_des_to_redis = VectorXd::Zero(MAX_DOF);
+VectorXd joint_temperatures = VectorXd::Zero(MAX_DOF);
 
 // Initial default position control gain values 
 MatrixXd kp_pos = MatrixXd::Identity(4, 4);
@@ -186,7 +188,7 @@ static void* ioThreadProc(void* inst)
     }
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_POSITIONS, joint_positions);
     redis_client.setEigenMatrixJSON(ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
-    redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);  
+    redis_client.setEigenMatrixJSON(ALLEGRO_POSITION_COMMANDED, joint_positions);
     redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KP, kp_pos);
     redis_client.setEigenMatrixJSON(ALLEGRO_GRASP_KV, kv_pos);
     redis_client.setEigenMatrixJSON(ALLEGRO_BHAND_POS_KP, bhand_pos_kp);
@@ -209,6 +211,9 @@ static void* ioThreadProc(void* inst)
     redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_POSITIONS, joint_positions);
     redis_client.addEigenToWriteCallback(0, ALLEGRO_CURRENT_VELOCITIES, joint_velocities);
     redis_client.addEigenToWriteCallback(0, ALLEGRO_DESIRED_TORQUES, tau_des_to_redis);
+
+    redis_client.createWriteCallback(1);
+    redis_client.addEigenToWriteCallback(1, ALLEGRO_JOINT_TEMPS, joint_temperatures);
 
     // Initial starting behavior
     pBHand->SetMotionType(eMotionType_GRAVITY_COMP);
@@ -456,11 +461,45 @@ static void* ioThreadProc(void* inst)
             case ID_RTR_TEMPERATURE_4:
             {
                 int sindex = (id & 0x00000007);
-                int celsius = (int)(data[0]      ) |
-                              (int)(data[1] << 8 ) |
-                              (int)(data[2] << 16) |
-                              (int)(data[3] << 24);
-                printf(">CAN(%d): Temperature[%d]: %d (celsius)\n", CAN_Ch, sindex, celsius);
+                // int celsius = (int)(data[0]      ) |
+                //               (int)(data[1] << 8 ) |
+                //               (int)(data[2] << 16) |
+                //               (int)(data[3] << 24);
+                int8_t c_j1 = (int8_t)(data[0]);
+                int8_t c_j2 = (int8_t)(data[1]);
+                int8_t c_j3 = (int8_t)(data[2]);
+                int8_t c_j4 = (int8_t)(data[3]);
+
+                if(sindex == 0)
+                {
+                    joint_temperatures[0] = c_j1;
+                    joint_temperatures[1] = c_j2;
+                    joint_temperatures[2] = c_j3;
+                    joint_temperatures[3] = c_j4;
+                }
+                else if (sindex == 1)
+                {
+                    joint_temperatures[4] = c_j1;
+                    joint_temperatures[5] = c_j2;
+                    joint_temperatures[6] = c_j3;
+                    joint_temperatures[7] = c_j4;
+                }
+                else if (sindex == 2)
+                {
+                    joint_temperatures[8] = c_j1;
+                    joint_temperatures[9] = c_j2;
+                    joint_temperatures[10] = c_j3;
+                    joint_temperatures[11] = c_j4;
+                }
+                else if (sindex == 3)
+                {
+                    joint_temperatures[12] = c_j1;
+                    joint_temperatures[13] = c_j2;
+                    joint_temperatures[14] = c_j3;
+                    joint_temperatures[15] = c_j4;
+                }
+                redis_client.executeWriteCallback(1);  // write (joint temperatures)
+                printf(">CAN(%d): Temperature[%d]: %d, %d, %d, %d (celsius)\n", CAN_Ch, sindex, c_j1, c_j2, c_j3, c_j4);
             }
                 break;
             default:
@@ -564,7 +603,7 @@ bool OpenCAN()
 
     // set periodic communication parameters(period)
     printf(">CAN: Comm period set\n");
-    short comm_period[3] = {3, 0, 0}; // millisecond {position, imu, temperature}
+    short comm_period[3] = {3, 0, 50}; // millisecond {position, imu, temperature}
     ret = command_set_period(CAN_Ch, comm_period);
     if(ret < 0)
     {
